@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUẢN LÝ XE TẢI - NHANN</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .tab-content { display: none; animation: fadeIn 0.2s ease-in-out; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .nav-link.active { border-bottom: 3px solid #1d4ed8; color: #1d4ed8; background-color: #eff6ff; }
+        .table-container { max-height: 700px; overflow-y: auto; }
+        thead th { position: sticky; top: 0; background: #f8fafc; z-index: 10; border-bottom: 2px solid #e2e8f0; }
+        .norm-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; display: flex; justify-content: space-between; padding: 2px 6px; border-radius: 4px; margin-bottom: 2px; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal.active { display: flex; }
+        #loadingOverlay { display: none; position: fixed; inset: 0; background: rgba(255,255,255,0.8); z-index: 200; flex-direction: column; align-items: center; justify-content: center; }
+        #loadingOverlay.active { display: flex; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700 mb-4"></div>
+        <p id="loadingText" class="text-sm font-bold text-slate-600 tracking-wide animate-pulse">Đang xử lý dữ liệu...</p>
+    </div>
+
+    <!-- Custom Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-20 right-4 z-[300] space-y-2 pointer-events-none"></div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="customConfirmModal" class="modal">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 mx-4">
+            <h3 id="confirmTitle" class="text-lg font-bold text-slate-800 mb-2">Xác nhận</h3>
+            <p id="confirmMessage" class="text-sm text-slate-500 mb-6">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeConfirmModal(false)" class="px-4 py-2 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">Hủy</button>
+                <button onclick="closeConfirmModal(true)" id="confirmBtnAction" class="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-md transition-colors">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Xe -->
+    <div id="vehicleModal" class="modal">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 mx-4 overflow-y-auto max-h-[90vh]">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 id="modalTitle" class="text-xl font-bold text-slate-800">Thông tin xe</h3>
+                </div>
+                <button onclick="toggleModal('vehicleModal', false)" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <i class="fas fa-times fa-lg"></i>
+                </button>
+            </div>
+            <form id="vehicleForm" onsubmit="saveVehicle(event)" class="space-y-6">
+                <input type="hidden" id="vIndex">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="md:col-span-1"><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Biển kiểm soát</label><input type="text" id="vBks" required class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hiệu xe</label><input type="text" id="vHieu" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tải trọng</label><input type="text" id="vTai" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quản lý</label><input type="text" id="vQuanly" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tỉnh</label><input type="text" id="vTinh" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl space-y-4 border border-slate-100">
+                    <p class="text-[10px] font-bold text-blue-600 uppercase tracking-widest border-l-4 border-blue-600 pl-2">Vận hành</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">KM Hiện tại</label><input type="text" id="vKmJ" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"></div>
+                        <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Ngày cập nhật</label><input type="text" id="vKmK" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="DD/MM/YYYY"></div>
+                        <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">KM/Ngày (L)</label><input type="number" id="vKmL" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                    </div>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-xl space-y-4 border border-blue-100">
+                    <p class="text-[10px] font-bold text-blue-700 uppercase tracking-widest border-l-4 border-blue-700 pl-2">BDSC Cấp trước</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">KM Thực hiện (Q)</label><input type="text" id="vKmQ" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"></div>
+                        <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cấp (R)</label><input type="text" id="vCapR" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ví dụ: Thay lo"></div>
+                        <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Ngày (S)</label><input type="text" id="vNgayS" class="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="DD/MM/YYYY"></div>
+                    </div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <p class="text-[10px] font-bold text-slate-600 uppercase tracking-widest border-l-4 border-slate-600 pl-2 mb-4">Định mức & Kiểm định</p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <input type="text" id="vDmM" placeholder="ĐM BD" class="w-full p-2 border rounded-lg text-sm">
+                        <input type="text" id="vDmN" placeholder="ĐM Dầu" class="w-full p-2 border rounded-lg text-sm">
+                        <input type="text" id="vDmO" placeholder="ĐM Lốp" class="w-full p-2 border rounded-lg text-sm">
+                        <input type="text" id="vDmP" placeholder="ĐM Bình" class="w-full p-2 border rounded-lg text-sm">
+                        <input type="text" id="vMaX" placeholder="Mã Tem" class="col-span-2 w-full p-2 border rounded-lg text-sm">
+                        <input type="text" id="vNgayV" placeholder="Ngày Cấp" class="w-full p-2 border rounded-lg text-sm">
+                        <input type="text" id="vHanW" placeholder="Hạn Cấp" class="w-full p-2 border rounded-lg text-sm">
+                    </div>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="toggleModal('vehicleModal', false)" class="flex-1 py-3 text-sm font-bold text-slate-500 bg-slate-100 rounded-xl">Hủy</button>
+                    <button type="submit" class="flex-1 py-3 text-sm font-bold text-white bg-blue-700 rounded-xl shadow-lg">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50 border-b border-slate-200">
+        <div class="max-w-[1600px] mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-blue-700 p-2 rounded-lg text-white"><i class="fas fa-shuttle-van fa-lg"></i></div>
+                    <span class="text-xl font-extrabold tracking-tight text-slate-800 uppercase">QUẢN LÝ XE TẢI - <span class="text-blue-700">NHANN</span></span>
+                </div>
+                <div class="hidden md:flex space-x-1 h-full text-sm font-semibold">
+                    <button onclick="switchTab('dashboard')" id="btn-dashboard" class="nav-link px-6 flex items-center active">Tổng quan</button>
+                    <button onclick="switchTab('fleet')" id="btn-fleet" class="nav-link px-6 flex items-center">Danh sách xe</button>
+                    <button onclick="switchTab('schedule')" id="btn-schedule" class="nav-link px-6 flex items-center">Lịch bảo dưỡng</button>
+                    <button onclick="switchTab('registry')" id="btn-registry" class="nav-link px-6 flex items-center italic">Lịch kiểm định</button>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button onclick="triggerClearAllData()" class="text-[9px] text-red-500 font-bold uppercase tracking-widest hover:text-red-700 transition-colors"><i class="fas fa-trash-alt mr-1"></i> Xóa Data</button>
+                    <div class="flex items-center gap-2 text-xs font-bold text-slate-500 border-l pl-4 uppercase">Admin DNG</div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-[1600px] mx-auto p-4 md:p-8">
+        
+        <!-- Màn hình Tổng quan -->
+        <section id="dashboard" class="tab-content active space-y-8">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="bg-blue-50 p-2.5 rounded-lg text-blue-600"><i class="fas fa-truck-moving"></i></div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tổng đội xe</span>
+                    </div>
+                    <h3 id="stat-total" class="text-4xl font-black text-slate-800">0</h3>
+                </div>
+                
+                <div onclick="switchTab('schedule')" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-red-300 transition-all group">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="bg-red-50 p-2.5 rounded-lg text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors"><i class="fas fa-exclamation-triangle"></i></div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cần bảo dưỡng</span>
+                    </div>
+                    <div class="flex items-baseline justify-between">
+                        <h3 id="stat-warning" class="text-4xl font-black text-red-600">0</h3>
+                        <span class="text-[10px] font-bold text-blue-600 underline uppercase">Chi tiết <i class="fas fa-arrow-right ml-1"></i></span>
+                    </div>
+                </div>
+
+                <div onclick="switchTab('registry')" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-orange-300 transition-all group">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="bg-orange-50 p-2.5 rounded-lg text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors"><i class="fas fa-calendar-check"></i></div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hết hạn kiểm định</span>
+                    </div>
+                    <div class="flex items-baseline justify-between">
+                        <h3 id="stat-expired-registry" class="text-4xl font-black text-orange-500">0</h3>
+                        <span class="text-[10px] font-bold text-blue-600 underline uppercase">Xem ngay <i class="fas fa-arrow-right ml-1"></i></span>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="bg-emerald-50 p-2.5 rounded-lg text-emerald-600"><i class="fas fa-check-circle"></i></div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">An toàn vận hành</span>
+                    </div>
+                    <h3 id="stat-safe" class="text-4xl font-black text-emerald-600">0</h3>
+                </div>
+            </div>
+
+            <div class="bg-white p-8 rounded-3xl border border-slate-200 text-center py-20">
+                <i class="fas fa-chart-line text-slate-200 text-6xl mb-4"></i>
+                <h4 class="text-slate-400 font-bold uppercase tracking-widest text-sm">Phân tích vận hành & Chi phí (Đang phát triển)</h4>
+            </div>
+        </section>
+
+        <!-- Màn hình Danh sách xe -->
+        <section id="fleet" class="tab-content space-y-4">
+            <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex flex-wrap gap-4 items-center justify-between">
+                    <div class="relative w-full max-w-sm">
+                        <input type="text" id="searchVehicle" onkeyup="filterFleet()" placeholder="Tìm biển số..." class="pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full bg-slate-50 transition-all">
+                        <i class="fas fa-search absolute left-3.5 top-3.5 text-slate-400"></i>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button onclick="openAddModal()" class="bg-white text-blue-700 border border-blue-200 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 hover:text-white transition-all shadow-sm">
+                            <i class="fas fa-plus mr-2"></i> Thêm xe
+                        </button>
+                        <button onclick="syncFromGoogleSheet()" class="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-700 hover:text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm flex items-center gap-2">
+                            <i class="fab fa-google-drive text-emerald-500"></i> Đồng bộ Google Sheet
+                        </button>
+                        <label class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md">
+                            <i class="fas fa-file-import mr-2"></i> Nhập Excel
+                            <input type="file" id="excelInput" class="hidden" accept=".xlsx, .xls" onchange="handleExcelImport(event)">
+                        </label>
+                        <button onclick="toggleSheetConfig()" class="text-slate-400 hover:text-blue-600 p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all" title="Cấu hình Link Google Sheet">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Google Sheets Link Configuration Panel -->
+                <div id="sheetConfigPanel" class="hidden bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 transition-all">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-600 uppercase tracking-wider"><i class="fas fa-link mr-1 text-blue-600"></i> Link Google Sheet Của Bạn</span>
+                        <span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-bold">Bất kỳ ai có liên kết đều có thể xem</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="googleSheetUrlInput" placeholder="Nhập đường dẫn Google Sheet..." class="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono text-slate-700">
+                        <button onclick="saveSheetUrl()" class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-lg transition-colors">Lưu liên kết</button>
+                    </div>
+                    <p class="text-[10px] text-slate-400 leading-relaxed"><i class="fas fa-info-circle mr-1"></i>Hệ thống tự động phát hiện cấu trúc bảng: <b>Cột chứa "BIỂN"</b> khớp xe, <b>Cột chứa "TÍNH LỊCH" hoặc "KM"</b> làm KM cập nhật, <b>Cột chứa "NGÀY TÍNH LỊCH"</b> làm Ngày cập nhật.</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                <div class="table-container">
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead class="text-slate-500 font-bold uppercase text-[10px] tracking-widest">
+                            <tr>
+                                <th class="px-4 py-5 text-center w-12 bg-slate-50/50">STT</th>
+                                <th class="px-6 py-5 bg-slate-50/50">Thông tin xe</th>
+                                <th class="px-6 py-5 bg-slate-50/50">Quản lý</th>
+                                <th class="px-6 py-5 text-right bg-slate-50/50">KM Hiện tại</th>
+                                <th class="px-6 py-5 text-center bg-blue-50/40">Cấp BD Trước</th>
+                                <th class="px-6 py-5 text-center bg-slate-50/50">Định Mức</th>
+                                <th class="px-6 py-5 text-center bg-orange-50/50">Kế hoạch BD</th>
+                                <th class="px-6 py-5 text-center bg-emerald-50/40">Kiểm định</th>
+                                <th class="px-4 py-5 text-center bg-slate-50/50 w-24">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fleet-body" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Lịch bảo dưỡng -->
+        <section id="schedule" class="tab-content space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-800">Lịch Bảo Dưỡng</h2>
+                    <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider mt-1">Dựa trên KM vận hành</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="populateScheduleTable('all')" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all">Tất cả</button>
+                    <button onclick="populateScheduleTable('urgent')" class="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold shadow-md hover:bg-red-700 transition-all">Cần thực hiện ngay (<span id="count-urgent">0</span>)</button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-md">
+                <div class="table-container">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-widest border-b border-slate-200">
+                            <tr>
+                                <th class="px-4 py-4 text-center w-12">STT</th>
+                                <th class="px-6 py-4">Xe & Quản lý</th>
+                                <th class="px-6 py-4 text-center">Cấp BD Trước</th>
+                                <th class="px-6 py-4 text-center">Cấp dự kiến</th>
+                                <th class="px-6 py-4 text-center">KM Dự kiến</th>
+                                <th class="px-6 py-4 text-center">Ngày dự kiến</th>
+                                <th class="px-6 py-4 text-center">KM Còn lại</th>
+                                <th class="px-6 py-4 text-center">Tình trạng</th>
+                                <th class="px-6 py-4 text-center w-32">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schedule-body" class="divide-y divide-slate-100 font-medium"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Lịch kiểm định -->
+        <section id="registry" class="tab-content space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-800">Lịch Kiểm Định</h2>
+                    <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider mt-1">Dựa trên thời hạn văn bản</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="populateRegistryTable('all')" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-all">Tất cả</button>
+                    <button onclick="populateRegistryTable('near')" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-xs font-bold shadow-md hover:bg-orange-700 transition-all">Sắp hết hạn (<span id="count-near-registry">0</span>)</button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-md">
+                <div class="table-container">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-widest border-b border-slate-200">
+                            <tr>
+                                <th class="px-4 py-4 text-center w-12">STT</th>
+                                <th class="px-6 py-4">Biển kiểm soát</th>
+                                <th class="px-6 py-4">Đơn vị quản lý</th>
+                                <th class="px-6 py-4 text-center">Mã Tem</th>
+                                <th class="px-6 py-4 text-center">Ngày cấp</th>
+                                <th class="px-6 py-4 text-center">Ngày hết hạn</th>
+                                <th class="px-6 py-4 text-center">Thời gian còn lại</th>
+                                <th class="px-6 py-4 text-center">Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody id="registry-body" class="divide-y divide-slate-100 font-medium"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const STORAGE_KEY = 'fleetpro_data_v7_final';
+        const SHEET_URL_KEY = 'fleetpro_gsheet_url_nhann';
+        const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1J23TfvmdRYcHZ-BS0M9eglkWnUxfo3UW65-PlleP2qk/edit?usp=sharing';
+
+        // Mock data khởi tạo
+        let fleetData = [
+            {
+                bks: "29KT-005.69", hieu: "Hino 500", tai: "7,000", quanly: "MR. HẬU (Đ.VẬN)", tinh: "DNG",
+                km_J: "1,020,552", km_K: "17/05/2026", km_L: 120,
+                km_Q: "1,013,125", cap_R: "BD CẤP 1", ngay_S: "13/02/2026",
+                dm_M: "8,000", dm_N: "14", dm_O: "110,000", dm_P: "18",
+                ngay_V: "07/04/2026", hanCap_W: "06/10/2026", ma_X: "VB-1231473"
+            },
+            {
+                bks: "29KT-004.05", hieu: "Isuzu QKR", tai: "4,700", quanly: "MR. THẮNG (HUB DNG)", tinh: "DNG",
+                km_J: "482,766", km_K: "17/05/2026", km_L: 135,
+                km_Q: "480,427", cap_R: "BD CẤP 1", ngay_S: "22/04/2026",
+                dm_M: "8,000", dm_N: "13", dm_O: "110,000", dm_P: "18",
+                ngay_V: "07/01/2026", hanCap_W: "06/07/2026", ma_X: "VA-3927504"
+            },
+            {
+                bks: "29KT-017.10", hieu: "Hyundai HD120", tai: "4,990", quanly: "MR. HẬU (Đ.VẬN)", tinh: "DNG",
+                km_J: "70,073", km_K: "17/05/2026", km_L: 95,
+                km_Q: "66,060", cap_R: "BD CẤP 1", ngay_S: "11/04/2026",
+                dm_M: "8,000", dm_N: "13", dm_O: "110,000", dm_P: "18",
+                ngay_V: "30/05/2024", hanCap_W: "29/05/2026", ma_X: "EB-115019"
+            },
+            {
+                bks: "29KT-017.19", hieu: "Hyundai HD120", tai: "4,990", quanly: "MR. THẮNG (HUB DNG)", tinh: "DNG",
+                km_J: "70,508", km_K: "17/05/2026", km_L: 100,
+                km_Q: "66,633", cap_R: "BD CẤP 1", ngay_S: "06/04/2026",
+                dm_M: "8,000", dm_N: "13", dm_O: "110,000", dm_P: "18",
+                ngay_V: "29/05/2024", hanCap_W: "28/05/2026", ma_X: "EB-115049"
+            },
+            {
+                bks: "29KT-017.22", hieu: "Hyundai HD120", tai: "4,990", quanly: "MR. HẬU (Đ.VẬN)", tinh: "DNG",
+                km_J: "78,579", km_K: "17/05/2026", km_L: 150,
+                km_Q: "71,266", cap_R: "BD CẤP 2", ngay_S: "24/03/2026",
+                dm_M: "8,000", dm_N: "14", dm_O: "110,000", dm_P: "18",
+                ngay_V: "29/05/2024", hanCap_W: "28/05/2026", ma_X: "EB-115055"
+            }
+        ];
+
+        // Hiển thị Toast
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = `flex items-center p-4 mb-2 bg-white rounded-xl shadow-lg border-l-4 transform translate-x-12 opacity-0 transition-all duration-300 pointer-events-auto max-w-sm`;
+            
+            let color = 'border-emerald-500 text-emerald-800';
+            let icon = 'fa-check-circle text-emerald-500';
+            
+            if (type === 'error') {
+                color = 'border-red-500 text-red-800';
+                icon = 'fa-exclamation-circle text-red-500';
+            } else if (type === 'info') {
+                color = 'border-blue-500 text-blue-800';
+                icon = 'fa-info-circle text-blue-500';
+            } else if (type === 'warning') {
+                color = 'border-orange-500 text-orange-800';
+                icon = 'fa-exclamation-triangle text-orange-500';
+            }
+
+            toast.innerHTML = `
+                <div class="${color} flex items-center gap-3 text-xs font-semibold">
+                    <i class="fas ${icon} fa-lg"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => { toast.classList.remove('translate-x-12', 'opacity-0'); }, 50);
+            setTimeout(() => {
+                toast.classList.add('translate-x-12', 'opacity-0');
+                setTimeout(() => { toast.remove(); }, 300);
+            }, 4000);
+        }
+
+        // Custom Confirm
+        let confirmPromiseResolve = null;
+        function showConfirmModal(title, message, isDangerous = false) {
+            document.getElementById('confirmTitle').innerText = title;
+            document.getElementById('confirmMessage').innerText = message;
+            
+            const actionBtn = document.getElementById('confirmBtnAction');
+            if (isDangerous) {
+                actionBtn.className = "px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-md transition-colors";
+            } else {
+                actionBtn.className = "px-4 py-2 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-md transition-colors";
+            }
+            
+            toggleModal('customConfirmModal', true);
+            return new Promise((resolve) => { confirmPromiseResolve = resolve; });
+        }
+
+        function closeConfirmModal(result) {
+            toggleModal('customConfirmModal', false);
+            if (confirmPromiseResolve) confirmPromiseResolve(result);
+        }
+
+        function toggleSheetConfig() {
+            const panel = document.getElementById('sheetConfigPanel');
+            panel.classList.toggle('hidden');
+        }
+
+        function saveSheetUrl() {
+            const val = document.getElementById('googleSheetUrlInput').value.trim();
+            if (!val) {
+                showToast("Vui lòng điền link Google Sheet hợp lệ!", "warning");
+                return;
+            }
+            localStorage.setItem(SHEET_URL_KEY, val);
+            showToast("Đã lưu liên kết Google Sheet mới thành công!", "success");
+            toggleSheetConfig();
+        }
+
+        function loadSheetUrl() {
+            const saved = localStorage.getItem(SHEET_URL_KEY);
+            const input = document.getElementById('googleSheetUrlInput');
+            if (input) {
+                input.value = saved || DEFAULT_SHEET_URL;
+            }
+            return saved || DEFAULT_SHEET_URL;
+        }
+
+        function saveToStorage() { localStorage.setItem(STORAGE_KEY, JSON.stringify(fleetData)); }
+        function loadFromStorage() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) fleetData = JSON.parse(saved);
+            loadSheetUrl();
+        }
+
+        function parseNum(val) {
+            if (!val) return 0;
+            let n = parseFloat(String(val).replace(/,/g, '').replace(/[^\d.-]/g, ''));
+            return isNaN(n) ? 0 : n;
+        }
+
+        function formatNum(val) { return parseNum(val).toLocaleString('en-US'); }
+
+        function parseDate(str) {
+            if (!str || str === "-" || str === "") return null;
+            const parts = str.split('/');
+            if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]);
+            return null;
+        }
+
+        // Phân tích CSV nâng cao
+        function parseCSV(text) {
+            let lines = [];
+            let row = [""];
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                let c = text[i];
+                let next = text[i+1];
+                if (c === '"') {
+                    if (inQuotes && next === '"') { row[row.length - 1] += '"'; i++; }
+                    else { inQuotes = !inQuotes; }
+                } else if (c === ',' && !inQuotes) {
+                    row.push('');
+                } else if ((c === '\r' || c === '\n') && !inQuotes) {
+                    if (c === '\r' && next === '\n') { i++; }
+                    lines.push(row);
+                    row = [''];
+                } else {
+                    row[row.length - 1] += c;
+                }
+            }
+            if (row.length > 1 || row[0] !== '') { lines.push(row); }
+            return lines;
+        }
+
+        function normalizeDateStr(str) {
+            if (!str) return '-';
+            str = str.trim();
+            if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
+                const parts = str.split('/');
+                return `${String(parts[0]).padStart(2, '0')}/${String(parts[1]).padStart(2, '0')}/${parts[2]}`;
+            }
+            if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+                const parts = str.split('-');
+                return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+            const cleanedStr = str.replace(/-/g, '/');
+            const parsed = Date.parse(cleanedStr);
+            if (!isNaN(parsed)) {
+                const d = new Date(parsed);
+                return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            }
+            return str;
+        }
+
+        function cleanLicensePlate(plate) {
+            return String(plate || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        }
+
+        // Hàm fetch dữ liệu bảo mật tích hợp Proxy khi chạy trên file cục bộ file:///
+        async function fetchWithProxyFallback(url) {
+            try {
+                // Thử tải trực tiếp trước
+                const res = await fetch(url);
+                if (res.ok) return await res.text();
+            } catch (err) {
+                console.warn("Direct fetch blocked by CORS. Trying backup proxy system...", err);
+            }
+
+            // Kích hoạt Proxy dự phòng 1: AllOrigins (Cực kỳ ổn định cho Google Sheets)
+            const proxyUrl1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            try {
+                const res = await fetch(proxyUrl1);
+                if (res.ok) return await res.text();
+            } catch (err) {
+                console.warn("Proxy 1 failed. Trying Proxy 2...", err);
+            }
+
+            // Kích hoạt Proxy dự phòng 2: CORS Proxy công cộng khác
+            const proxyUrl2 = `https://cors-anywhere.herokuapp.com/${url}`;
+            try {
+                const res = await fetch(proxyUrl2);
+                if (res.ok) return await res.text();
+            } catch (err) {
+                throw new Error("Tất cả cổng kết nối Google Sheets đều bị chặn CORS! Hãy chắc chắn bạn đang kết nối Internet.");
+            }
+        }
+
+        async function syncFromGoogleSheet() {
+            const url = loadSheetUrl();
+            const sheetIdRegex = /\/d\/([a-zA-Z0-9-_]+)/;
+            const match = url.match(sheetIdRegex);
+            
+            if (!match || !match[1]) {
+                showToast("URL Google Sheet không hợp lệ! Vui lòng kiểm tra lại cấu hình.", "error");
+                toggleSheetConfig();
+                return;
+            }
+
+            const sheetId = match[1];
+            let gidParam = "";
+            const gidRegex = /[#&]gid=([0-9]+)/;
+            const gidMatch = url.match(gidRegex);
+            if (gidMatch && gidMatch[1]) {
+                gidParam = `&gid=${gidMatch[1]}`;
+            }
+
+            const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gidParam}`;
+            
+            const overlay = document.getElementById('loadingOverlay');
+            const overlayText = document.getElementById('loadingText');
+            
+            overlayText.innerText = "Đang đồng bộ dữ liệu thông qua hệ thống Proxy bảo mật...";
+            overlay.classList.add('active');
+
+            try {
+                const csvText = await fetchWithProxyFallback(exportUrl);
+                
+                if (csvText.includes("<!DOCTYPE html>") || csvText.includes("login") || csvText.includes("Sign in")) {
+                    throw new Error("Quyền truy cập bị từ chối! Hãy đảm bảo bạn đã chọn 'Bất kỳ ai có đường liên kết đều có thể xem' trên Google Sheet.");
+                }
+
+                const rows = parseCSV(csvText);
+
+                if (rows.length <= 1) {
+                    showToast("Bảng tính rỗng hoặc không có dữ liệu để đọc!", "warning");
+                    overlay.classList.remove('active');
+                    return;
+                }
+
+                // --- THUẬT TOÁN TÌM KIẾM CỘT THÔNG MINH ---
+                let headerRowIndex = -1;
+                let colBksIdx = -1;
+                let colKmIdx = -1;
+                let colDateIdx = -1;
+
+                const maxHeaderScan = Math.min(15, rows.length);
+                for (let i = 0; i < maxHeaderScan; i++) {
+                    const currentRow = rows[i];
+                    for (let j = 0; j < currentRow.length; j++) {
+                        const cellVal = String(currentRow[j] || '').toUpperCase().trim();
+                        
+                        // Định dạng cột Biển số xe (Cột B)
+                        if ((cellVal.includes("BIỂN") || cellVal.includes("BKS") || cellVal.includes("KIỂM SOÁT")) && colBksIdx === -1) {
+                            colBksIdx = j;
+                            headerRowIndex = i;
+                        }
+                        // Định dạng cột KM tính lịch (Cột C)
+                        if ((cellVal.includes("TÍNH LỊCH") || cellVal.includes("KM TỔNG") || cellVal.includes("KM THỰC TẾ") || cellVal === "KM" || cellVal.includes("CẬP NHẬT")) && colKmIdx === -1) {
+                            colKmIdx = j;
+                            headerRowIndex = i;
+                        }
+                        // Định dạng cột Ngày tính lịch (Cột D)
+                        if (cellVal.includes("NGÀY") && colDateIdx === -1) {
+                            colDateIdx = j;
+                            headerRowIndex = i;
+                        }
+                    }
+                    if (colBksIdx !== -1 && (colKmIdx !== -1 || colDateIdx !== -1)) {
+                        break;
+                    }
+                }
+
+                // Dự phòng cấu hình theo cấu trúc ảnh của bạn (B=1, C=2, D=3)
+                if (colBksIdx === -1) colBksIdx = 1; 
+                if (colKmIdx === -1) colKmIdx = 2;  
+                if (colDateIdx === -1) colDateIdx = 3; 
+                if (headerRowIndex === -1) headerRowIndex = 2; // Thường bắt đầu từ dòng STT dòng 3
+
+                let updatedCount = 0;
+                let unmatchedPlates = [];
+                const startDataIndex = headerRowIndex + 1;
+
+                for (let i = startDataIndex; i < rows.length; i++) {
+                    const row = rows[i];
+                    if (row.length <= Math.max(colBksIdx, colKmIdx, colDateIdx)) continue;
+
+                    const rawPlate = row[colBksIdx];
+                    const rawKm = row[colKmIdx];
+                    const rawDate = row[colDateIdx];
+
+                    if (!rawPlate || rawPlate.trim() === "" || rawPlate.trim() === "STT") continue;
+
+                    const cleanPlateInput = cleanLicensePlate(rawPlate);
+                    if (cleanPlateInput.length < 3) continue;
+                    
+                    let matched = false;
+                    for (let vehicle of fleetData) {
+                        if (cleanLicensePlate(vehicle.bks) === cleanPlateInput) {
+                            if (rawKm && rawKm.trim() !== "") {
+                                vehicle.km_J = formatNum(rawKm);
+                            }
+                            if (rawDate && rawDate.trim() !== "") {
+                                vehicle.km_K = normalizeDateStr(rawDate);
+                            }
+                            matched = true;
+                            updatedCount++;
+                            break;
+                        }
+                    }
+
+                    if (!matched && rawPlate.trim() !== "") {
+                        unmatchedPlates.push(rawPlate.trim());
+                    }
+                }
+
+                saveToStorage();
+                populateFleetTable();
+                
+                if (updatedCount > 0) {
+                    showToast(`Đồng bộ thành công ${updatedCount} phương tiện thông qua hệ thống Proxy!`, "success");
+                    if (unmatchedPlates.length > 0) {
+                        setTimeout(() => {
+                            const uniqueUnmatched = [...new Set(unmatchedPlates)].filter(p => p.length > 4);
+                            if (uniqueUnmatched.length > 0) {
+                                showToast(`Phát hiện biển số mới trên Sheet chưa có trong ứng dụng: ${uniqueUnmatched.slice(0, 3).join(', ')}${uniqueUnmatched.length > 3 ? '...' : ''}`, "warning");
+                            }
+                        }, 1200);
+                    }
+                } else {
+                    showToast("Kết nối thành công nhưng không tìm thấy biển số xe nào trùng khớp trong hệ thống!", "warning");
+                }
+
+            } catch (err) {
+                console.error("Google Sync Error: ", err);
+                showToast(err.message || "Không thể đồng bộ! Hãy kiểm tra lại kết nối mạng hoặc thiết lập chia sẻ.", "error");
+            } finally {
+                overlay.classList.remove('active');
+            }
+        }
+
+        function calculateNextPlan(item) {
+            const kmTruoc = parseNum(item.km_Q);
+            const kmDinhMuc = parseNum(item.dm_M);
+            const kmHienTai = parseNum(item.km_J);
+            const kmMoiNgay = parseNum(item.km_L);
+            const ngayCapNhat = parseDate(item.km_K);
+            
+            const kmKeHoachNum = kmTruoc + kmDinhMuc;
+            const kmKeHoachStr = formatNum(kmKeHoachNum);
+            
+            let capDuKienLabel = "BD Cấp 1"; 
+            const capTruoc = String(item.cap_R || "").toUpperCase();
+
+            if (capTruoc.includes("CẤP 1") || capTruoc.includes("CAP 1") || capTruoc === "1") {
+                capDuKienLabel = "BD Cấp 2";
+            } else if (capTruoc.includes("CẤP 2") || capTruoc.includes("CAP 2") || capTruoc === "2") {
+                capDuKienLabel = "BD Cấp 1";
+            }
+
+            const kmConLai = kmKeHoachNum - kmHienTai;
+            let ngayDuKien = "-", colorClass = "text-slate-400", warningType = 0;
+
+            if (kmMoiNgay > 0 && ngayCapNhat) {
+                const projectedDate = new Date(ngayCapNhat);
+                projectedDate.setDate(projectedDate.getDate() + Math.floor(kmConLai / kmMoiNgay));
+                ngayDuKien = `${String(projectedDate.getDate()).padStart(2,'0')}/${String(projectedDate.getMonth()+1).padStart(2,'0')}/${projectedDate.getFullYear()}`;
+                if (kmConLai < 500) { colorClass = "text-red-600 font-bold"; warningType = 2; }
+                else if (kmConLai < 1500) { colorClass = "text-orange-600 font-bold"; warningType = 1; }
+                else { colorClass = "text-emerald-600 font-bold"; }
+            }
+            
+            return { 
+                kmKeHoach: kmKeHoachStr, 
+                kmConLai: formatNum(kmConLai), 
+                rawKmConLai: kmConLai, 
+                ngayDuKien, 
+                colorClass, 
+                warningType, 
+                capDuKien: capDuKienLabel 
+            };
+        }
+
+        function populateFleetTable(data = fleetData) {
+            const body = document.getElementById('fleet-body');
+            let stats = { total: data.length, warning: 0, pending: 0, registryExpired: 0, safe: 0 };
+            const today = new Date();
+
+            if (!body) return;
+
+            body.innerHTML = data.map((item, index) => {
+                const plan = calculateNextPlan(item);
+                if (plan.warningType === 2) stats.warning++;
+                if (plan.warningType === 1) stats.pending++;
+
+                const hanW = parseDate(item.hanCap_W);
+                let wColor = "text-slate-600";
+                if (hanW) {
+                    const diff = Math.ceil((hanW - today) / 86400000);
+                    if (diff < 0) {
+                        wColor = "text-red-600 font-bold";
+                        stats.registryExpired++;
+                    }
+                    else if (diff < 30) {
+                        wColor = "text-orange-600 font-bold";
+                        stats.registryExpired++;
+                    }
+                    else {
+                        wColor = "text-emerald-600 font-bold";
+                        stats.safe++;
+                    }
+                }
+
+                return `
+                <tr class="hover:bg-blue-50/30">
+                    <td class="px-4 py-4 text-center text-slate-400 font-bold text-xs">${index + 1}</td>
+                    <td class="px-6 py-4">
+                        <div class="font-bold text-slate-900 text-sm">${item.bks}</div>
+                        <div class="text-[10px] text-slate-500 font-medium uppercase mt-0.5">${item.hieu} • ${item.tinh} • ${item.tai}kg</div>
+                    </td>
+                    <td class="px-6 py-4 font-semibold text-slate-600 text-xs uppercase">${item.quanly}</td>
+                    <td class="px-6 py-4 text-right font-semibold">
+                        <div class="font-mono font-bold text-slate-800 text-sm">${item.km_J}</div>
+                        <div class="font-mono text-[9px] text-slate-400 mt-0.5">${item.km_K}</div>
+                        <div class="font-mono text-[9px] text-blue-600 font-bold">${item.km_L} KM/N</div>
+                    </td>
+                    <td class="px-6 py-4 text-center bg-blue-50/20">
+                        <div class="text-blue-700 font-bold text-xs">${item.km_Q} KM</div>
+                        <div class="text-[10px] font-bold text-slate-500 my-0.5 uppercase">${item.cap_R || '-'}</div>
+                        <div class="text-[9px] font-mono text-slate-400 font-semibold">${item.ngay_S || '-'}</div>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <div class="w-32 mx-auto">
+                            <div class="norm-tag bg-slate-50 text-slate-700"><span>BD:</span> <b>${item.dm_M}</b></div>
+                            <div class="norm-tag bg-blue-50 text-blue-700"><span>DẦU:</span> <b>${item.dm_N}</b></div>
+                            <div class="norm-tag bg-slate-100 text-slate-600"><span>LỐP:</span> <b>${item.dm_O}</b></div>
+                            <div class="norm-tag bg-orange-50 text-orange-700"><span>BÌNH:</span> <b>${item.dm_P}</b></div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-center bg-orange-50/20">
+                        <div class="text-xs font-bold text-blue-700">${plan.capDuKien}</div>
+                        <div class="text-xs font-black text-slate-800">${plan.kmKeHoach} KM</div>
+                        <div class="text-xs mt-1 ${plan.colorClass}">${plan.ngayDuKien}</div>
+                    </td>
+                    <td class="px-6 py-4 text-center bg-emerald-50/20">
+                        <div class="text-[9px] text-slate-400 font-mono italic">Cấp: ${item.ngay_V || '-'}</div>
+                        <div class="text-xs ${wColor} font-bold font-mono my-0.5">Hạn: ${item.hanCap_W || '-'}</div>
+                        <div class="text-[10px] font-bold text-slate-700 uppercase tracking-tighter">Tem: ${item.ma_X || '-'}</div>
+                    </td>
+                    <td class="px-4 py-4 text-center">
+                        <div class="flex justify-center gap-1">
+                            <button onclick="openEditModal(${index})" class="text-blue-600 p-2 hover:bg-blue-600 hover:text-white rounded-lg"><i class="fas fa-edit"></i></button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            document.getElementById('stat-total').innerText = stats.total;
+            document.getElementById('stat-warning').innerText = stats.warning;
+            document.getElementById('stat-expired-registry').innerText = stats.registryExpired;
+            document.getElementById('stat-safe').innerText = stats.safe;
+            document.getElementById('count-urgent').innerText = stats.warning;
+        }
+
+        function populateScheduleTable(filter = 'all') {
+            const body = document.getElementById('schedule-body');
+            if (!body) return;
+            let data = [...fleetData].map(item => ({...item, plan: calculateNextPlan(item)}));
+            if (filter === 'urgent') data = data.filter(item => item.plan.warningType === 2);
+            data.sort((a, b) => a.plan.rawKmConLai - b.plan.rawKmConLai);
+
+            body.innerHTML = data.map((item, index) => {
+                let badge = `<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-bold uppercase">Bình thường</span>`;
+                if (item.plan.warningType === 2) badge = `<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-bold uppercase animate-pulse">Cần làm ngay</span>`;
+                if (item.plan.warningType === 1) badge = `<span class="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-[9px] font-bold uppercase">Sắp đến hạn</span>`;
+
+                return `
+                <tr class="hover:bg-slate-50">
+                    <td class="px-4 py-4 text-center text-slate-400 font-bold text-xs">${index + 1}</td>
+                    <td class="px-6 py-4 font-bold text-slate-800">${item.bks} <span class="block text-[10px] font-normal text-slate-400 uppercase">${item.quanly}</span></td>
+                    <td class="px-6 py-4 text-center">
+                        <div class="text-xs text-slate-700 font-bold">${item.km_Q} KM</div>
+                        <div class="text-[10px] text-slate-500 uppercase mt-0.5">${item.cap_R || '-'}</div>
+                        <div class="text-[9px] text-slate-400 font-mono italic">${item.ngay_S || '-'}</div>
+                    </td>
+                    <td class="px-6 py-4 text-center font-bold text-blue-700 uppercase text-xs">${item.plan.capDuKien}</td>
+                    <td class="px-6 py-4 text-center font-mono font-bold text-slate-800 text-xs">${item.plan.kmKeHoach} KM</td>
+                    <td class="px-6 py-4 text-center text-xs">${item.plan.ngayDuKien}</td>
+                    <td class="px-6 py-4 text-center font-mono font-bold ${item.plan.colorClass} text-xs">${item.plan.kmConLai} KM</td>
+                    <td class="px-6 py-4 text-center">${badge}</td>
+                    <td class="px-6 py-4 text-center">
+                        <button onclick="openEditModal(findVehicleIndexByBks('${item.bks}'))" class="text-blue-600 hover:underline font-bold text-xs">Cập nhật</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function findVehicleIndexByBks(bks) {
+            return fleetData.findIndex(item => item.bks === bks);
+        }
+
+        function populateRegistryTable(filter = 'all') {
+            const body = document.getElementById('registry-body');
+            const today = new Date();
+            let countNear = 0;
+
+            let data = fleetData.map(item => {
+                const hanW = parseDate(item.hanCap_W);
+                let diffDays = null;
+                if (hanW) diffDays = Math.ceil((hanW - today) / 86400000);
+                return { ...item, diffDays };
+            });
+
+            if (filter === 'near') data = data.filter(item => item.diffDays !== null && item.diffDays < 30);
+            data.sort((a, b) => (a.diffDays || 9999) - (b.diffDays || 9999));
+
+            body.innerHTML = data.map((item, index) => {
+                let status = "N/A";
+                let rowClass = "";
+                let diffLabel = item.diffDays !== null ? `${item.diffDays} ngày` : "-";
+
+                if (item.diffDays !== null) {
+                    if (item.diffDays < 0) {
+                        status = `<span class="text-red-600 font-bold uppercase text-[10px]">Đã quá hạn</span>`;
+                        rowClass = "bg-red-50/50";
+                        countNear++;
+                    } else if (item.diffDays < 15) {
+                        status = `<span class="text-orange-600 font-bold uppercase text-[10px]">Cần làm ngay</span>`;
+                        rowClass = "bg-orange-50/50";
+                        countNear++;
+                    } else if (item.diffDays < 30) {
+                        status = `<span class="text-blue-600 font-bold uppercase text-[10px]">Sắp đến hạn</span>`;
+                        countNear++;
+                    } else {
+                        status = `<span class="text-emerald-600 font-bold uppercase text-[10px]">An toàn</span>`;
+                    }
+                }
+
+                return `
+                <tr class="hover:bg-slate-50 transition-colors ${rowClass}">
+                    <td class="px-4 py-4 text-center text-slate-400 font-bold text-xs">${index + 1}</td>
+                    <td class="px-6 py-5 font-bold text-slate-800">${item.bks}</td>
+                    <td class="px-6 py-5 font-semibold text-slate-500 uppercase text-xs">${item.quanly}</td>
+                    <td class="px-6 py-5 text-center font-mono text-xs text-slate-700">${item.ma_X || '-'}</td>
+                    <td class="px-6 py-5 text-center text-xs text-slate-500">${item.ngay_V || '-'}</td>
+                    <td class="px-6 py-5 text-center font-bold text-slate-700 text-xs">${item.hanCap_W || '-'}</td>
+                    <td class="px-6 py-5 text-center font-mono font-bold text-slate-800 text-xs">${diffLabel}</td>
+                    <td class="px-6 py-5 text-center">${status}</td>
+                </tr>`;
+            }).join('');
+
+            document.getElementById('count-near-registry').innerText = fleetData.filter(i => {
+                const d = parseDate(i.hanCap_W);
+                return d && Math.ceil((d - today)/86400000) < 30;
+            }).length;
+        }
+
+        function toggleModal(id, show) { document.getElementById(id).classList.toggle('active', show); }
+        function switchTab(id) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.toggle('active', el.id === id));
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.toggle('active', el.id === 'btn-' + id));
+            if (id === 'schedule') populateScheduleTable();
+            if (id === 'registry') populateRegistryTable();
+            if (id === 'fleet') populateFleetTable();
+        }
+
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = "Thêm xe mới";
+            document.getElementById('vIndex').value = "-1";
+            document.getElementById('vehicleForm').reset();
+            toggleModal('vehicleModal', true);
+        }
+
+        function openEditModal(index) {
+            if (index === -1) {
+                showToast("Không tìm thấy chỉ mục xe để sửa!", "error");
+                return;
+            }
+            const item = fleetData[index];
+            document.getElementById('modalTitle').innerText = "Cập nhật: " + item.bks;
+            document.getElementById('vIndex').value = index;
+            document.getElementById('vBks').value = item.bks;
+            document.getElementById('vHieu').value = item.hieu;
+            document.getElementById('vTai').value = item.tai;
+            document.getElementById('vQuanly').value = item.quanly;
+            document.getElementById('vTinh').value = item.tinh;
+            document.getElementById('vKmJ').value = item.km_J;
+            document.getElementById('vKmK').value = item.km_K;
+            document.getElementById('vKmL').value = item.km_L;
+            document.getElementById('vKmQ').value = item.km_Q;
+            document.getElementById('vCapR').value = item.cap_R;
+            document.getElementById('vNgayS').value = item.ngay_S;
+            document.getElementById('vDmM').value = item.dm_M;
+            document.getElementById('vDmN').value = item.dm_N;
+            document.getElementById('vDmO').value = item.dm_O;
+            document.getElementById('vDmP').value = item.dm_P;
+            document.getElementById('vMaX').value = item.ma_X;
+            document.getElementById('vNgayV').value = item.ngay_V;
+            document.getElementById('vHanW').value = item.hanCap_W;
+            toggleModal('vehicleModal', true);
+        }
+
+        function saveVehicle(e) {
+            e.preventDefault();
+            const index = parseInt(document.getElementById('vIndex').value);
+            const data = {
+                bks: document.getElementById('vBks').value.toUpperCase(),
+                hieu: document.getElementById('vHieu').value,
+                tai: formatNum(document.getElementById('vTai').value),
+                quanly: document.getElementById('vQuanly').value,
+                tinh: document.getElementById('vTinh').value,
+                km_J: formatNum(document.getElementById('vKmJ').value),
+                km_K: document.getElementById('vKmK').value,
+                km_L: parseNum(document.getElementById('vKmL').value),
+                km_Q: formatNum(document.getElementById('vKmQ').value),
+                cap_R: document.getElementById('vCapR').value,
+                ngay_S: document.getElementById('vNgayS').value,
+                dm_M: formatNum(document.getElementById('vDmM').value),
+                dm_N: document.getElementById('vDmN').value,
+                dm_O: formatNum(document.getElementById('vDmO').value),
+                dm_P: formatNum(document.getElementById('vDmP').value),
+                ngay_V: document.getElementById('vNgayV').value,
+                hanCap_W: document.getElementById('vHanW').value,
+                ma_X: document.getElementById('vMaX').value
+            };
+            if (index === -1) fleetData.unshift(data); else fleetData[index] = data;
+            saveToStorage(); populateFleetTable(); toggleModal('vehicleModal', false);
+            showToast("Đã lưu thông tin xe thành công!", "success");
+        }
+
+        function formatExcelDate(serial) {
+            if (!serial || serial === "-") return "-";
+            if (isNaN(serial)) return serial;
+            const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
+            return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+        }
+
+        function handleExcelImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            document.getElementById('loadingOverlay').classList.add('active');
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+                    const mappedData = jsonData.slice(1).map(row => {
+                        const v = Object.values(row);
+                        return {
+                            bks: (row["BKS"] || v[0] || "").toString().toUpperCase(),
+                            tinh: row["Tỉnh"] || v[3] || "DNG",
+                            hieu: row["Hiệu"] || v[2] || "",
+                            tai: formatNum(v[4]), 
+                            quanly: v[8] || "N/A",
+                            km_J: formatNum(v[9]),
+                            km_K: formatExcelDate(v[10]), 
+                            km_L: parseNum(v[11]),
+                            km_Q: formatNum(v[16]),
+                            cap_R: v[17] || "-",
+                            ngay_S: formatExcelDate(v[18]),
+                            dm_M: formatNum(v[12]),
+                            dm_N: v[13] || "0",
+                            dm_O: formatNum(v[14]),
+                            dm_P: v[15] || "0",
+                            ngay_V: formatExcelDate(v[21]),
+                            hanCap_W: formatExcelDate(v[22]),
+                            ma_X: v[23] || "-"
+                        };
+                    }).filter(i => i.bks !== "");
+                    fleetData = mappedData;
+                    saveToStorage(); populateFleetTable();
+                    showToast("Nhập dữ liệu từ file Excel hoàn tất!", "success");
+                } catch (err) {
+                    console.error("Lỗi khi đọc file Excel:", err);
+                    showToast("Lỗi định dạng file Excel!", "error");
+                } finally {
+                    document.getElementById('loadingOverlay').classList.remove('active');
+                    event.target.value = '';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function triggerClearAllData() {
+            const confirmAction = await showConfirmModal(
+                "Xác nhận xóa dữ liệu?", 
+                "Hành động này sẽ xóa sạch danh sách xe hiện có trong bộ nhớ trình duyệt và không thể khôi phục.", 
+                true
+            );
+            if (confirmAction) {
+                fleetData = []; 
+                localStorage.removeItem(STORAGE_KEY); 
+                populateFleetTable(); 
+                showToast("Đã xóa sạch dữ liệu đội xe!", "info");
+            }
+        }
+
+        function filterFleet() {
+            const val = document.getElementById('searchVehicle').value.toLowerCase();
+            populateFleetTable(fleetData.filter(item => item.bks.toLowerCase().includes(val)));
+        }
+
+        window.onload = () => { loadFromStorage(); populateFleetTable(); };
+    </script>
+</body>
+</html>
